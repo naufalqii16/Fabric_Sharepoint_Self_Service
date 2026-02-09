@@ -1,0 +1,9 @@
+streamlit
+msal
+azure-identity
+msgraph-sdk
+microsoft-fabric-api
+pyodbc
+pandas
+requests
+python-dotenv
