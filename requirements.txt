@@ -7,3 +7,7 @@ pyodbc
 pandas
 requests
 python-dotenv
+ipykernel
+pyspark
+requests
+openpyxl
