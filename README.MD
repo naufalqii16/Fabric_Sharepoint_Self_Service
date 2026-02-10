@@ -26,7 +26,7 @@ The application is designed for controlled, repeatable ingestion without requiri
 
 ```
 ├── app.py
-
+|
 ├── .env.example
 └── README.md
 ```
