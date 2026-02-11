@@ -1,5 +1,5 @@
 import requests
-from config import TENANT_ID, CLIENT_ID, CLIENT_SECRET, GRAPH_SCOPE
+from services.config import TENANT_ID, CLIENT_ID, CLIENT_SECRET, GRAPH_SCOPE
 
 class AuthService:
     def __init__(self):

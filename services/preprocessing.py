@@ -9,6 +9,86 @@ from io import BytesIO
 import xml.etree.ElementTree as ET
 import pandas as pd
 import requests
+import pandas as pd
+from io import BytesIO
+from typing import Dict, Tuple, Optional
+
+def process_file_to_dataframe( file_bytes: BytesIO, file_name: str, sheet_name: Optional[str] = None, 
+                              header: int = 0, csv_delimiter: str = "comma") -> pd.DataFrame:
+    # Your existing read logic here
+    if file_name.lower().endswith(".xlsx") or file_name.lower().endswith(".xls"):
+        from services.preprocessing import read_excel_with_repair
+        return read_excel_with_repair(file_bytes, sheet_name or 0, header, file_name)
+    
+    elif file_name.lower().endswith(".csv"):
+        # CSV logic
+        text = file_bytes.getvalue().decode("utf-8", errors="ignore")
+        delimiter_map = {
+            "comma": ",", "semicolon": ";", 
+            "tab": "\t", "pipe": "|"
+        }
+        delimiter = delimiter_map.get(csv_delimiter, ",")
+        
+        import io
+        return pd.read_csv(io.StringIO(text), delimiter=delimiter, header=header)
+    
+    else:
+        raise ValueError(f"Unsupported file type: {file_name}")
+
+def extract_columns_metadata(df: pd.DataFrame) -> Dict:
+    """
+    Extract column information from DataFrame
+    Returns: {
+        'column_name': {
+            'dtype': str,
+            'null_count': int,
+            'null_percentage': float,
+            'unique_count': int,
+            'sample_values': list,
+            'inferred_type': str  # 'numeric', 'text', 'date', 'boolean'
+        }
+    }
+    """
+    columns_info = {}
+    
+    for col in df.columns:
+        col_data = df[col]
+        
+        # Infer semantic type
+        inferred_type = infer_column_type(col_data)
+        
+        columns_info[col] = {
+            'dtype': str(col_data.dtype),
+            'null_count': int(col_data.isnull().sum()),
+            'null_percentage': round(col_data.isnull().sum() / len(df) * 100, 2),
+            'unique_count': int(col_data.nunique()),
+            'sample_values': col_data.dropna().head(5).astype(str).tolist(),
+            'inferred_type': inferred_type
+        }
+    
+    return columns_info
+
+def infer_column_type(series: pd.Series) -> str:
+    """Infer semantic type of column"""
+    # Numeric
+    if pd.api.types.is_numeric_dtype(series):
+        if series.dropna().apply(lambda x: x == int(x)).all():
+            return 'integer'
+        return 'float'
+    
+    # Boolean
+    if pd.api.types.is_bool_dtype(series):
+        return 'boolean'
+    
+    # Date
+    try:
+        pd.to_datetime(series.dropna(), errors='raise')
+        return 'date'
+    except:
+        pass
+    
+    # Default to text
+    return 'text'
 
 def backup_file_in_sharepoint(file_id, file_name, parent_folder_id, headers, SITE_ID, DRIVE_ID, backup_folder_path):
     """
@@ -433,3 +513,6 @@ def read_data(FOLDER_PATH, FILE_PATTERN, SHEET_NAME, HEADER, TOKEN, SITE_ID, DRI
     print('='*60)
 
     return final_df, TableName
+
+# def get_columns(data):
+    
