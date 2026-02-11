@@ -1,0 +1,235 @@
+{
+  "file_metadata": {
+    "name": "Online Retail.xlsx",
+    "file_id": "016IKG7YX3EDDZ7XBAG5CKLQZQDTUNDHYW",
+    "folder_name": null,
+    "total_rows": 541909,
+    "is_sampled": true
+  },
+  "input_params": {
+    "FolderPath": "Fabric_Excel_Files/Test_Excel/Self_service_framework",
+    "FilePattern": "Online Retail.xlsx",
+    "SheetName": "Online Retail",
+    "header": 0,
+    "NeedBackup": "N",
+    "FlexibleSchema": "N",
+    "CSVDelimiter": "comma",
+    "BackupFolderPath": null
+  },
+  "columns_info": {
+    "InvoiceNo": {
+      "dtype": "object",
+      "null_count": 0,
+      "null_percentage": 0.0,
+      "unique_count": 25900,
+      "sample_values": [
+        "536365",
+        "536365",
+        "536365",
+        "536365",
+        "536365"
+      ],
+      "inferred_type": "text"
+    },
+    "StockCode": {
+      "dtype": "object",
+      "null_count": 0,
+      "null_percentage": 0.0,
+      "unique_count": 4070,
+      "sample_values": [
+        "85123A",
+        "71053",
+        "84406B",
+        "84029G",
+        "84029E"
+      ],
+      "inferred_type": "text"
+    },
+    "Description": {
+      "dtype": "object",
+      "null_count": 1454,
+      "null_percentage": 0.27,
+      "unique_count": 4223,
+      "sample_values": [
+        "WHITE HANGING HEART T-LIGHT HOLDER",
+        "WHITE METAL LANTERN",
+        "CREAM CUPID HEARTS COAT HANGER",
+        "KNITTED UNION FLAG HOT WATER BOTTLE",
+        "RED WOOLLY HOTTIE WHITE HEART."
+      ],
+      "inferred_type": "text"
+    },
+    "Quantity": {
+      "dtype": "int64",
+      "null_count": 0,
+      "null_percentage": 0.0,
+      "unique_count": 722,
+      "sample_values": [
+        "6",
+        "6",
+        "8",
+        "6",
+        "6"
+      ],
+      "inferred_type": "integer"
+    },
+    "InvoiceDate": {
+      "dtype": "datetime64[ns]",
+      "null_count": 0,
+      "null_percentage": 0.0,
+      "unique_count": 23260,
+      "sample_values": [
+        "2010-12-01 08:26:00",
+        "2010-12-01 08:26:00",
+        "2010-12-01 08:26:00",
+        "2010-12-01 08:26:00",
+        "2010-12-01 08:26:00"
+      ],
+      "inferred_type": "date"
+    },
+    "UnitPrice": {
+      "dtype": "float64",
+      "null_count": 0,
+      "null_percentage": 0.0,
+      "unique_count": 1630,
+      "sample_values": [
+        "2.55",
+        "3.39",
+        "2.75",
+        "3.39",
+        "3.39"
+      ],
+      "inferred_type": "float"
+    },
+    "CustomerID": {
+      "dtype": "float64",
+      "null_count": 135080,
+      "null_percentage": 24.93,
+      "unique_count": 4372,
+      "sample_values": [
+        "17850.0",
+        "17850.0",
+        "17850.0",
+        "17850.0",
+        "17850.0"
+      ],
+      "inferred_type": "integer"
+    },
+    "Country": {
+      "dtype": "object",
+      "null_count": 0,
+      "null_percentage": 0.0,
+      "unique_count": 38,
+      "sample_values": [
+        "United Kingdom",
+        "United Kingdom",
+        "United Kingdom",
+        "United Kingdom",
+        "United Kingdom"
+      ],
+      "inferred_type": "text"
+    }
+  },
+  "data_preview": [
+    {
+      "InvoiceNo": 536365,
+      "StockCode": "85123A",
+      "Description": "WHITE HANGING HEART T-LIGHT HOLDER",
+      "Quantity": 6,
+      "InvoiceDate": "2010-12-01 08:26:00",
+      "UnitPrice": 2.55,
+      "CustomerID": 17850.0,
+      "Country": "United Kingdom"
+    },
+    {
+      "InvoiceNo": 536365,
+      "StockCode": 71053,
+      "Description": "WHITE METAL LANTERN",
+      "Quantity": 6,
+      "InvoiceDate": "2010-12-01 08:26:00",
+      "UnitPrice": 3.39,
+      "CustomerID": 17850.0,
+      "Country": "United Kingdom"
+    },
+    {
+      "InvoiceNo": 536365,
+      "StockCode": "84406B",
+      "Description": "CREAM CUPID HEARTS COAT HANGER",
+      "Quantity": 8,
+      "InvoiceDate": "2010-12-01 08:26:00",
+      "UnitPrice": 2.75,
+      "CustomerID": 17850.0,
+      "Country": "United Kingdom"
+    },
+    {
+      "InvoiceNo": 536365,
+      "StockCode": "84029G",
+      "Description": "KNITTED UNION FLAG HOT WATER BOTTLE",
+      "Quantity": 6,
+      "InvoiceDate": "2010-12-01 08:26:00",
+      "UnitPrice": 3.39,
+      "CustomerID": 17850.0,
+      "Country": "United Kingdom"
+    },
+    {
+      "InvoiceNo": 536365,
+      "StockCode": "84029E",
+      "Description": "RED WOOLLY HOTTIE WHITE HEART.",
+      "Quantity": 6,
+      "InvoiceDate": "2010-12-01 08:26:00",
+      "UnitPrice": 3.39,
+      "CustomerID": 17850.0,
+      "Country": "United Kingdom"
+    },
+    {
+      "InvoiceNo": 536365,
+      "StockCode": 22752,
+      "Description": "SET 7 BABUSHKA NESTING BOXES",
+      "Quantity": 2,
+      "InvoiceDate": "2010-12-01 08:26:00",
+      "UnitPrice": 7.65,
+      "CustomerID": 17850.0,
+      "Country": "United Kingdom"
+    },
+    {
+      "InvoiceNo": 536365,
+      "StockCode": 21730,
+      "Description": "GLASS STAR FROSTED T-LIGHT HOLDER",
+      "Quantity": 6,
+      "InvoiceDate": "2010-12-01 08:26:00",
+      "UnitPrice": 4.25,
+      "CustomerID": 17850.0,
+      "Country": "United Kingdom"
+    },
+    {
+      "InvoiceNo": 536366,
+      "StockCode": 22633,
+      "Description": "HAND WARMER UNION JACK",
+      "Quantity": 6,
+      "InvoiceDate": "2010-12-01 08:28:00",
+      "UnitPrice": 1.85,
+      "CustomerID": 17850.0,
+      "Country": "United Kingdom"
+    },
+    {
+      "InvoiceNo": 536366,
+      "StockCode": 22632,
+      "Description": "HAND WARMER RED POLKA DOT",
+      "Quantity": 6,
+      "InvoiceDate": "2010-12-01 08:28:00",
+      "UnitPrice": 1.85,
+      "CustomerID": 17850.0,
+      "Country": "United Kingdom"
+    },
+    {
+      "InvoiceNo": 536367,
+      "StockCode": 84879,
+      "Description": "ASSORTED COLOUR BIRD ORNAMENT",
+      "Quantity": 32,
+      "InvoiceDate": "2010-12-01 08:34:00",
+      "UnitPrice": 1.69,
+      "CustomerID": 13047.0,
+      "Country": "United Kingdom"
+    }
+  ]
+}
