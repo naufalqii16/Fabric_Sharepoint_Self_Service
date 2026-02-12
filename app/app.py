@@ -289,6 +289,7 @@ if st.session_state.step == 1:
         )
     
     with col5:
+        st.markdown("<div style='padding-top: 32px;'></div>", unsafe_allow_html=True)
         need_backup = st.checkbox(
             "Create Backup",
             value=form_vals['need_backup'],  # ✅ TAMBAHAN: Default value
@@ -314,7 +315,7 @@ if st.session_state.step == 1:
             "📥 Fetch File Data",
             type="primary",
             disabled=fetch_disabled,
-            use_container_width=True,
+            width='stretch',
             key="btn_fetch"
         )
     
@@ -325,7 +326,7 @@ if st.session_state.step == 1:
             "➡️ Next",
             type="secondary",
             disabled=next_disabled,
-            use_container_width=True,
+            width='stretch',
             key="btn_next_step1"
         )
     
@@ -588,10 +589,10 @@ elif st.session_state.step == 2:
     col_back, col_next = st.columns([1, 1])
     
     with col_back:
-        back_clicked = st.button("← Back", type="secondary", use_container_width=True, key="back_step2")
+        back_clicked = st.button("← Back", type="secondary", width='stretch', key="back_step2")
     
     with col_next:
-        next_clicked = st.button("Next →", type="primary", use_container_width=True, key="next_step2")
+        next_clicked = st.button("Next →", type="primary", width='stretch', key="next_step2")
     
     if back_clicked:
         # Save current selections before going back
@@ -620,43 +621,124 @@ elif st.session_state.step == 2:
 elif st.session_state.step == 3:
     st.subheader("🎯 Step 3: Finalize Configuration")
     
-    st.info("🚧 This step is under construction")
-    
+    # st.info("🚧 This step is under construction")
+    fabric_options = [
+            "Proj_Data_Warehouse", "Marketing_Lakehouse", 
+            "Finance_Analytics_DB", "Legacy_DB_Mirror", 
+            "Operations_Staging", "Sales_Gold_Layer"
+        ]
+    st.markdown("### 📍 Destination")
+    # target_destination = st.text_input("Target Destination", key="key_target_destination")
+    if 'dest_config' not in st.session_state.user_input:
+        st.session_state.user_input['dest_config'] = {
+            'target_dest': fabric_options[0] if fabric_options else "",
+            'table_name': '',
+            'pic_name': ''
+        }
+    dest_val = st.session_state.user_input['dest_config']
+    with st.container(border=True):
+        st.markdown("### 🏢 Target Destination")
+        
+        # Target Destination (Searchable Dropdown)
+        # index=[...].index() digunakan agar pilihan user 'nempel' saat bolak-balik page
+        target_destination = st.selectbox(
+            "Target Destination (Search & Select)*",
+            options=fabric_options,
+            index=fabric_options.index(dest_val['target_dest']) if dest_val['target_dest'] in fabric_options else 0,
+            help="Type to search: e.g. 'Marketing', 'Finance', 'Legacy_DB'",
+            key="sb_target_dest"
+        )
+        st.caption("ℹ️ *Search by typing the name in the box above*")
+
+        # Final Table Name
+        table_name = st.text_input(
+            "Final Table Name*",
+            value=dest_val['table_name'],
+            placeholder="e.g., stg_sales_report_daily",
+            help="This name will be used as the table name in the target database",
+            key="ti_table_name"
+        )
+
+        # Configurator Name (PIC)
+        pic_name = st.text_input(
+            "Configurator Name (PIC)*",
+            value=dest_val['pic_name'],
+            placeholder="e.g., Jono Sudibyo",
+            key="ti_pic_name"
+        )
+    st.divider()
     # Show summary
     st.markdown("### 📋 Configuration Summary")
     
     user_input = st.session_state.user_input
     
-    col1, col2 = st.columns(2)
+    # st.subheader("📝 Final Review")
+    st.caption("Please double-check all configurations before submitting.")
+
+    # Membuat 3 kolom agar seimbang
+    summ_col1, summ_col2 = st.columns(2)
+
+    with summ_col1:
+        st.markdown("##### 📂 Source Info")
+        # Gunakan styling yang konsisten
+        st.info(f"""
+        **Folder:** `{user_input.get('folder_path')}`  
+        **File:** `{user_input.get('file_name')}`  
+        **Sheet:** `{user_input.get('sheet_name') or 'Default'}`
+        """)
+
+    with summ_col2:
+        st.markdown("##### 🔑 Key & Schema")
+        # Ambil info key columns
+        keys = user_input.get('key_columns', [])
+        key_text = ", ".join(keys) if keys else "None selected"
+        
+        # Hitung total kolom dari columns_info
+        total_cols = len(st.session_state.columns_info) if st.session_state.columns_info is not None else 0
+        
+        st.success(f"""
+        **Total Columns:** `{total_cols}`  
+        **Primary Keys:** `{key_text}`
+        """)
+
+
+    st.markdown("##### 🎯 Destination")
+    # Ambil data dari dest_config yang kita buat tadi
+    dest = user_input.get('dest_config', {})
     
-    with col1:
-        st.markdown("**📂 Source:**")
-        st.write(f"- Folder: `{user_input.get('folder_path')}`")
-        st.write(f"- File: `{user_input.get('file_name')}`")
-        st.write(f"- Sheet: `{user_input.get('sheet_name') or 'First sheet'}`")
-    
-    with col2:
-        st.markdown("**🔑 Key Columns:**")
-        for col in user_input.get('key_columns', []):
-            st.write(f"- {col}")
+    st.warning(f"""
+    **Target:** `{target_destination}`  
+    **Table:** `{table_name if table_name else 'Wait for input...'}`  
+    **PIC:** `{pic_name if pic_name else 'Wait for input...'}`
+    """)
     
     st.divider()
     
     col_back, col_submit, col_reset = st.columns([1, 1, 1])
     
     with col_back:
-        if st.button("← Back", type="secondary"):
+        if st.button("← Back", type="secondary", width='stretch'):
+            st.session_state.user_input['dest_config'] = {
+            'target_dest': target_destination,
+            'table_name': table_name,
+            'pic_name': pic_name
+            }
             prev_step()
             st.rerun()
     
     with col_submit:
-        if st.button("🚀 Submit to Fabric", type="primary"):
+        if st.button("🚀 Submit to Fabric", type="primary", width='stretch'):
+            st.session_state.user_input['dest_config'] = {
+            'target_dest': target_destination,
+            'table_name': table_name,
+            'pic_name': pic_name
+            }
             st.success("✅ Configuration submitted!")
             st.balloons()
             # TODO: Send to Fabric Pipeline here
     
     with col_reset:
-        if st.button("🔄 Start Over", type="secondary"):
+        if st.button("🔄 Start Over", type="secondary", width='stretch'):
             reset_app()
             st.rerun()
 
