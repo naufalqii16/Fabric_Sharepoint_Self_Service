@@ -622,11 +622,10 @@ elif st.session_state.step == 3:
     st.subheader("🎯 Step 3: Finalize Configuration")
     
     # st.info("🚧 This step is under construction")
-    fabric_options = [
-            "Proj_Data_Warehouse", "Marketing_Lakehouse", 
-            "Finance_Analytics_DB", "Legacy_DB_Mirror", 
-            "Operations_Staging", "Sales_Gold_Layer"
-        ]
+    fabric_options = ["SILVER_LH_MCUADMIN_MCU_ADMIN-SILVER", 
+                      "SILVER_LH_HIS_IMPORT-SILVER", 
+                      "SILVER_LH_SPECTRA", 
+                      "SILVER_LH_P_FINANCE_DEV"]
     st.markdown("### 📍 Destination")
     # target_destination = st.text_input("Target Destination", key="key_target_destination")
     if 'dest_config' not in st.session_state.user_input:
