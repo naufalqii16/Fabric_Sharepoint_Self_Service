@@ -47,6 +47,25 @@ if 'user_input' not in st.session_state:
 if 'df_preview' not in st.session_state:
     st.session_state.df_preview = None
 
+# ✅ TAMBAHAN: Flag untuk track apakah data sudah di-fetch
+if 'data_fetched' not in st.session_state:
+    st.session_state.data_fetched = False
+    
+if 'schema_data' not in st.session_state:
+    st.session_state.schema_data = None
+# ✅ TAMBAHAN: Store form values dari Step 1
+if 'form_values' not in st.session_state:
+    st.session_state.form_values = {
+        'sp_url': '',
+        'folder_path': '',
+        'file_name': '',
+        'extension': '.xlsx',
+        'delimiter': ',',
+        'sheet_name': '',
+        'header_row': 0,
+        'need_backup': False
+    }
+
 # ============================================
 # HELPER FUNCTIONS
 # ============================================
@@ -63,11 +82,33 @@ def reset_app():
     st.session_state.columns_info = None
     st.session_state.user_input = {}
     st.session_state.df_preview = None
+    st.session_state.data_fetched = False  # ✅ TAMBAHAN
+    st.session_state.form_values = {  # ✅ TAMBAHAN
+        'sp_url': '',
+        'folder_path': '',
+        'file_name': '',
+        'extension': '.xlsx',
+        'delimiter': ',',
+        'sheet_name': '',
+        'header_row': 0,
+        'need_backup': False
+    }
+
+# ✅ UBAH: Fungsi reset_page2_data (hanya reset page 2, form step 1 tetap)
+def reset_page2_data():
+    """Reset hanya data page 2 (column selections)"""
+    st.session_state.file_data = None
+    st.session_state.columns_info = None
+    st.session_state.df_preview = None
+    st.session_state.data_fetched = False
+    # user_input key_columns akan direset saat fetch
+    if 'key_columns' in st.session_state.user_input:
+        del st.session_state.user_input['key_columns']
 
 def process_user_input():
     """
     Backend processing: Read file from SharePoint and extract column metadata
-    This runs when user clicks 'Next' on Step 1
+    This runs when user clicks 'Fetch' on Step 1
     """
     with st.spinner("🔄 Processing your request..."):
         try:
@@ -128,6 +169,7 @@ def process_user_input():
             st.session_state.file_data = file_meta
             st.session_state.columns_info = columns_info
             st.session_state.df_preview = df.head(100)  # Store sample only
+            st.session_state.data_fetched = True  # ✅ TAMBAHAN: Set flag to True
             
             st.success("✅ Processing complete!")
             
@@ -164,109 +206,166 @@ st.progress(progress_mapping.get(st.session_state.step, 0.33))
 if st.session_state.step == 1:
     st.subheader("📍 Step 1: Source & File")
     
-    with st.form("step1_form"):
-        st.text("Source Location")
-        
-        # SharePoint URL (optional for display)
-        sp_url = st.text_input(
-            "Sharepoint URL (optional)", 
-            placeholder="https://yourcompany.sharepoint.com/...",
-            help="This is for reference only"
+    # ✅ UBAH: Tidak pakai st.form lagi, karena perlu 2 button terpisah
+    st.text("Source Location")
+    
+    # ✅ TAMBAHAN: Use stored form values as default
+    form_vals = st.session_state.form_values
+    
+    # SharePoint URL (optional for display)
+    sp_url = st.text_input(
+        "Sharepoint URL (optional)", 
+        value=form_vals['sp_url'],  # ✅ TAMBAHAN: Default value
+        placeholder="https://yourcompany.sharepoint.com/...",
+        help="This is for reference only",
+        key="input_sp_url"
+    )
+    
+    # Folder Path (required)
+    folder_path = st.text_input(
+        "Folder Path*",
+        value=form_vals['folder_path'],  # ✅ TAMBAHAN: Default value
+        placeholder="e.g., Fabric_Excel_Files/Test_Excel",
+        help="Path to the folder in SharePoint",
+        key="input_folder_path"
+    )
+    
+    # File details
+    col1, col2 = st.columns(2)
+    with col1:
+        file_name = st.text_input(
+            "File Name*",
+            value=form_vals['file_name'],  # ✅ TAMBAHAN: Default value
+            placeholder="e.g., Online Retail.xlsx",
+            help="Exact filename including extension",
+            key="input_file_name"
         )
-        
-        # Folder Path (required)
-        folder_path = st.text_input(
-            "Folder Path*",
-            placeholder="e.g., Fabric_Excel_Files/Test_Excel",
-            help="Path to the folder in SharePoint"
+    with col2:
+        extension = st.selectbox(
+            "Extension",
+            [".xlsx", ".xls", ".csv"],
+            index=[".xlsx", ".xls", ".csv"].index(form_vals['extension']),  # ✅ TAMBAHAN: Default
+            help="File type",
+            key="input_extension"
         )
-        
-        # File details
-        col1, col2 = st.columns(2)
-        with col1:
-            file_name = st.text_input(
-                "File Name*",
-                placeholder="e.g., Online Retail.xlsx",
-                help="Exact filename including extension"
+    
+    # CSV-specific options
+    delimiter = None
+    custom_delimiter = None
+    if extension == ".csv":
+        c1, c2 = st.columns(2)
+        with c1:
+            delimiter = st.selectbox(
+                "Delimiter", 
+                [",", ";", "\t", "|", "Custom"],
+                key="input_delimiter"
             )
-        with col2:
-            extension = st.selectbox(
-                "Extension",
-                [".xlsx", ".xls", ".csv"],
-                help="File type"
-            )
+        with c2:
+            if delimiter == "Custom":
+                custom_delimiter = st.text_input(
+                    "Input Custom Delimiter",
+                    key="input_custom_delimiter"
+                )
+                if not custom_delimiter:
+                    st.warning("⚠️ Custom delimiter cannot be empty!")
+    
+    # Additional file options
+    col3, col4, col5 = st.columns(3)
+    
+    with col3:
+        sheet_name = st.text_input(
+            "Sheet Name",
+            value=form_vals['sheet_name'],  # ✅ TAMBAHAN: Default value
+            placeholder="Leave empty for first sheet",
+            help="For Excel files only",
+            key="input_sheet_name"
+        )
+    
+    with col4:
+        header_row = st.number_input(
+            "Header Row Index",
+            min_value=0,
+            value=form_vals['header_row'],  # ✅ TAMBAHAN: Default value
+            help="Row index where column headers are (0-indexed)",
+            key="input_header_row"
+        )
+    
+    with col5:
+        need_backup = st.checkbox(
+            "Create Backup",
+            value=form_vals['need_backup'],  # ✅ TAMBAHAN: Default value
+            help="Create backup copy before reading",
+            key="input_need_backup"
+        )
+    
+    st.divider()
+    
+    # ✅ UBAH: Validation
+    mandatory_fields = [folder_path, file_name]
+    all_filled = all(mandatory_fields)
+    
+    # ✅ UBAH: TWO SEPARATE BUTTONS
+    col_fetch, col_next = st.columns([1, 1])
+    
+    with col_fetch:
+        fetch_disabled = not all_filled
+        if extension == ".csv" and delimiter == "Custom" and not custom_delimiter:
+            fetch_disabled = True
         
-        # CSV-specific options
-        delimiter = None
-        custom_delimiter = None
-        if extension == ".csv":
-            c1, c2 = st.columns(2)
-            with c1:
-                delimiter = st.selectbox("Delimiter", [",", ";", "\t", "|", "Custom"])
-            with c2:
-                if delimiter == "Custom":
-                    custom_delimiter = st.text_input("Input Custom Delimiter")
-                    if not custom_delimiter:
-                        st.warning("⚠️ Custom delimiter cannot be empty!")
+        fetch_clicked = st.button(
+            "📥 Fetch File Data",
+            type="primary",
+            disabled=fetch_disabled,
+            use_container_width=True,
+            key="btn_fetch"
+        )
+    
+    with col_next:
+        # ✅ TAMBAHAN: Next button hanya muncul kalau data sudah di-fetch
+        next_disabled = not st.session_state.data_fetched
+        next_clicked = st.button(
+            "➡️ Next",
+            type="secondary",
+            disabled=next_disabled,
+            use_container_width=True,
+            key="btn_next_step1"
+        )
+    
+    # ✅ UBAH: Handle Fetch button click
+    if fetch_clicked:
+        # ✅ TAMBAHAN: Save form values to session state
+        st.session_state.form_values = {
+            'sp_url': sp_url,
+            'folder_path': folder_path,
+            'file_name': file_name,
+            'extension': extension,
+            'delimiter': custom_delimiter if delimiter == "Custom" else delimiter,
+            'sheet_name': sheet_name,
+            'header_row': header_row,
+            'need_backup': need_backup
+        }
         
-        # Additional file options
-        col3, col4, col5 = st.columns(3)
+        # Save to user_input
+        st.session_state.user_input = st.session_state.form_values.copy()
         
-        with col3:
-            sheet_name = st.text_input(
-                "Sheet Name",
-                placeholder="Leave empty for first sheet",
-                help="For Excel files only"
-            )
+        # ✅ TAMBAHAN: Reset page 2 data when fetching new data
+        reset_page2_data()
         
-        with col4:
-            header_row = st.number_input(
-                "Header Row Index",
-                min_value=0,
-                value=0,
-                help="Row index where column headers are (0-indexed)"
-            )
+        # Process file and extract columns
+        success = process_user_input()
         
-        with col5:
-            need_backup = st.checkbox(
-                "Create Backup",
-                value=False,
-                help="Create backup copy before reading"
-            )
-        
-        st.divider()
-        
-        # Validation
-        mandatory_fields = [folder_path, file_name]
-        
-        # Submit button
-        submitted = st.form_submit_button("🔍 Fetch File & Next", type="primary")
-        
-        if submitted:
-            if not all(mandatory_fields):
-                st.error("❌ Please fill all mandatory fields marked with *")
-            elif extension == ".csv" and delimiter == "Custom" and not custom_delimiter:
-                st.error("❌ Please provide custom delimiter")
-            else:
-                # Save user input to session state
-                st.session_state.user_input = {
-                    'sp_url': sp_url,
-                    'folder_path': folder_path,
-                    'file_name': file_name,
-                    'extension': extension,
-                    'delimiter': custom_delimiter if delimiter == "Custom" else delimiter,
-                    'sheet_name': sheet_name,
-                    'header_row': header_row,
-                    'need_backup': need_backup
-                }
-                
-                # Process file and extract columns
-                success = process_user_input()
-                
-                if success:
-                    # Move to next step
-                    next_step()
-                    st.rerun()
+        if success:
+            st.success("✅ Data fetched successfully! Click 'Next' to continue.")
+            st.rerun()
+    
+    # ✅ TAMBAHAN: Handle Next button click
+    if next_clicked:
+        next_step()
+        st.rerun()
+    
+    # ✅ TAMBAHAN: Show status if data already fetched
+    if st.session_state.data_fetched:
+        st.success("✅ Data is ready! Click 'Next' to configure columns.")
 
 # ============================================
 # STEP 2: KEY COLUMNS SELECTION
@@ -316,64 +415,112 @@ elif st.session_state.step == 2:
     
     st.divider()
     
-    # Key columns selection form
-    with st.form("step2_form"):
-        st.markdown("### 🔑 Select Key Columns")
-        st.caption("Key columns uniquely identify each row (like primary keys)")
+    # ✅ UBAH: Tidak pakai st.form, karena perlu preserve state
+    st.markdown("### 🔑 Select Key Columns")
+    st.caption("Key columns uniquely identify each row (like primary keys)")
+    
+    # Get all column names
+    all_columns = list(st.session_state.columns_info.keys())
+    
+    # ✅ TAMBAHAN: Initialize selected_key_columns dari session state (jika ada)
+    if 'key_columns' not in st.session_state.user_input:
+        st.session_state.user_input['key_columns'] = []
+    
+    selected_key_columns = []
+    
+    # Create checkboxes in a grid layout
+    num_cols = 3
+    cols = st.columns(num_cols)
+    
+    for idx, col_name in enumerate(all_columns):
+        col_info = st.session_state.columns_info[col_name]
         
-        # Get all column names
-        all_columns = list(st.session_state.columns_info.keys())
+        # ✅ TAMBAHAN: Check if this column was previously selected
+        default_checked = col_name in st.session_state.user_input.get('key_columns', [])
         
-        # Create checkboxes in a grid layout
-        num_cols = 3
-        cols = st.columns(num_cols)
-        
-        selected_key_columns = []
-        
-        for idx, col_name in enumerate(all_columns):
-            col_info = st.session_state.columns_info[col_name]
+        # Put checkbox in appropriate column
+        with cols[idx % num_cols]:
+            is_selected = st.checkbox(
+                f"**{col_name}**",
+                value=default_checked,  # ✅ TAMBAHAN: Default value
+                key=f"key_col_{col_name}",
+                help=f"Type: {col_info['inferred_type']} | Unique: {col_info['unique_count']}"
+            )
             
-            # Put checkbox in appropriate column
-            with cols[idx % num_cols]:
-                is_selected = st.checkbox(
-                    f"**{col_name}**",
-                    key=f"key_col_{col_name}",
-                    help=f"Type: {col_info['inferred_type']} | Unique: {col_info['unique_count']}"
-                )
-                
-                if is_selected:
-                    selected_key_columns.append(col_name)
-                
-                # Show sample values under checkbox
-                st.caption(f"📝 {', '.join(str(v) for v in col_info['sample_values'][:2])}")
+            if is_selected:
+                selected_key_columns.append(col_name)
+            
+            # Show sample values under checkbox
+            # st.caption(f"📝 {', '.join(str(v) for v in col_info['sample_values'][:2])}")
+    
+    if st.session_state.schema_data is None:
+        init_list = []
+        # Ambil daftar key_columns yang mungkin sudah disimpan sebelumnya
+        existing_keys = st.session_state.user_input.get('key_columns', [])
         
-        st.divider()
-        
-        # Navigation buttons
-        col_back, col_next = st.columns([1, 1])
-        
-        with col_back:
-            back_clicked = st.form_submit_button("← Back", type="secondary")
-        
-        with col_next:
-            next_clicked = st.form_submit_button("Next →", type="primary")
-        
-        if back_clicked:
-            prev_step()
+        for col_name, col_info in st.session_state.columns_info.items():
+            init_list.append({
+                'Column': col_name,
+                'Is Key': col_name in existing_keys, # Centang jika sudah ada di list key
+                'Type': col_info['inferred_type'],   # Ini yang bisa diubah-ubah nanti
+                'Nulls': f"{col_info['null_count']} ({col_info['null_percentage']}%)",
+                'Unique': col_info['unique_count'],
+                'Sample': ', '.join(str(v) for v in col_info['sample_values'][:2])
+            })
+        st.session_state.schema_data = pd.DataFrame(init_list)
+
+    # --- 2. TAMPILKAN EDITOR ---
+    st.markdown("### 🛠️ Data Schema Editor")
+    st.caption("You can change the **Type** and mark **Is Key** directly in the table below.")
+
+    # Menggunakan st.data_editor agar field 'Type' dan 'Is Key' bisa diubah
+    edited_df = st.data_editor(
+        st.session_state.schema_data,
+        column_config={
+            "Column": st.column_config.Column(disabled=True), # Tidak boleh ubah nama kolom
+            "Nulls": st.column_config.Column(disabled=True),
+            "Unique": st.column_config.Column(disabled=True),
+            "Sample": st.column_config.Column(disabled=True, width="medium"),
+            "Type": st.column_config.Selectbox(
+                "Data Type",
+                options=["string", "integer", "double", "boolean", "datetime", "date", "decimal"],
+                help="Change the detected data type"
+            )
+        },
+        use_container_width=True,
+        hide_index=True,
+        key="schema_editor_step2"
+    )
+
+    st.divider()
+    
+    # ✅ UBAH: Navigation buttons (tidak dalam form)
+    col_back, col_next = st.columns([1, 1])
+    
+    with col_back:
+        back_clicked = st.button("← Back", type="secondary", use_container_width=True)
+    
+    with col_next:
+        next_clicked = st.button("Next →", type="primary", use_container_width=True)
+    
+    if back_clicked:
+        # ✅ TAMBAHAN: Save current selections before going back
+        st.session_state.user_input['key_columns'] = selected_key_columns
+        prev_step()
+        st.rerun()
+    
+    if next_clicked:
+        if not selected_key_columns:
+            st.error("❌ Please select at least one key column")
+        else:
+            # Save selected key columns
+            st.session_state.user_input['key_columns'] = selected_key_columns
+            
+            st.success(f"✅ Selected {len(selected_key_columns)} key column(s): {', '.join(selected_key_columns)}")
+            
+            # Move to next step
+            next_step()
             st.rerun()
-        
-        if next_clicked:
-            if not selected_key_columns:
-                st.error("❌ Please select at least one key column")
-            else:
-                # Save selected key columns
-                st.session_state.user_input['key_columns'] = selected_key_columns
-                
-                st.success(f"✅ Selected {len(selected_key_columns)} key column(s): {', '.join(selected_key_columns)}")
-                
-                # Move to next step
-                next_step()
-                st.rerun()
 
 # ============================================
 # STEP 3: ADDITIONAL CONFIGURATIONS (Placeholder)
@@ -427,10 +574,15 @@ elif st.session_state.step == 3:
 with st.sidebar:
     st.markdown("### 🔍 Debug Info")
     st.write(f"Current Step: {st.session_state.step}")
+    st.write(f"Data Fetched: {'Yes' if st.session_state.data_fetched else 'No'}")  # ✅ UBAH
     st.write(f"Data Loaded: {'Yes' if st.session_state.columns_info else 'No'}")
     
     if st.session_state.columns_info:
         st.write(f"Total Columns: {len(st.session_state.columns_info)}")
+    
+    # ✅ TAMBAHAN: Show selected key columns
+    if st.session_state.user_input.get('key_columns'):
+        st.write(f"Key Columns Selected: {len(st.session_state.user_input['key_columns'])}")
     
     if st.button("🔄 Reset App"):
         reset_app()
