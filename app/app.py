@@ -50,9 +50,7 @@ if 'df_preview' not in st.session_state:
 # ✅ TAMBAHAN: Flag untuk track apakah data sudah di-fetch
 if 'data_fetched' not in st.session_state:
     st.session_state.data_fetched = False
-    
-if 'schema_data' not in st.session_state:
-    st.session_state.schema_data = None
+
 # ✅ TAMBAHAN: Store form values dari Step 1
 if 'form_values' not in st.session_state:
     st.session_state.form_values = {
@@ -370,8 +368,11 @@ if st.session_state.step == 1:
 # ============================================
 # STEP 2: KEY COLUMNS SELECTION
 # ============================================
+# ============================================
+# STEP 2: KEY COLUMNS SELECTION & DATA TYPE MAPPING
+# ============================================
 elif st.session_state.step == 2:
-    st.subheader("⚙️ Step 2: Configure Key Columns")
+    st.subheader("⚙️ Step 2: Configure Columns")
     
     # Check if data is loaded
     if st.session_state.columns_info is None:
@@ -415,14 +416,16 @@ elif st.session_state.step == 2:
     
     st.divider()
     
-    # ✅ UBAH: Tidak pakai st.form, karena perlu preserve state
+    # ============================================
+    # SECTION 1: KEY COLUMNS SELECTION
+    # ============================================
     st.markdown("### 🔑 Select Key Columns")
     st.caption("Key columns uniquely identify each row (like primary keys)")
     
     # Get all column names
     all_columns = list(st.session_state.columns_info.keys())
     
-    # ✅ TAMBAHAN: Initialize selected_key_columns dari session state (jika ada)
+    # Initialize selected_key_columns dari session state (jika ada)
     if 'key_columns' not in st.session_state.user_input:
         st.session_state.user_input['key_columns'] = []
     
@@ -435,77 +438,165 @@ elif st.session_state.step == 2:
     for idx, col_name in enumerate(all_columns):
         col_info = st.session_state.columns_info[col_name]
         
-        # ✅ TAMBAHAN: Check if this column was previously selected
+        # Check if this column was previously selected
         default_checked = col_name in st.session_state.user_input.get('key_columns', [])
         
         # Put checkbox in appropriate column
         with cols[idx % num_cols]:
             is_selected = st.checkbox(
                 f"**{col_name}**",
-                value=default_checked,  # ✅ TAMBAHAN: Default value
+                value=default_checked,
                 key=f"key_col_{col_name}",
                 help=f"Type: {col_info['inferred_type']} | Unique: {col_info['unique_count']}"
             )
             
             if is_selected:
                 selected_key_columns.append(col_name)
-            
-            # Show sample values under checkbox
-            # st.caption(f"📝 {', '.join(str(v) for v in col_info['sample_values'][:2])}")
     
-    if st.session_state.schema_data is None:
-        init_list = []
-        # Ambil daftar key_columns yang mungkin sudah disimpan sebelumnya
-        existing_keys = st.session_state.user_input.get('key_columns', [])
-        
-        for col_name, col_info in st.session_state.columns_info.items():
-            init_list.append({
-                'Column': col_name,
-                'Is Key': col_name in existing_keys, # Centang jika sudah ada di list key
-                'Type': col_info['inferred_type'],   # Ini yang bisa diubah-ubah nanti
-                'Nulls': f"{col_info['null_count']} ({col_info['null_percentage']}%)",
-                'Unique': col_info['unique_count'],
-                'Sample': ', '.join(str(v) for v in col_info['sample_values'][:2])
-            })
-        st.session_state.schema_data = pd.DataFrame(init_list)
-
-    # --- 2. TAMPILKAN EDITOR ---
-    st.markdown("### 🛠️ Data Schema Editor")
-    st.caption("You can change the **Type** and mark **Is Key** directly in the table below.")
-
-    # Menggunakan st.data_editor agar field 'Type' dan 'Is Key' bisa diubah
-    edited_df = st.data_editor(
-        st.session_state.schema_data,
-        column_config={
-            "Column": st.column_config.Column(disabled=True), # Tidak boleh ubah nama kolom
-            "Nulls": st.column_config.Column(disabled=True),
-            "Unique": st.column_config.Column(disabled=True),
-            "Sample": st.column_config.Column(disabled=True, width="medium"),
-            "Type": st.column_config.Selectbox(
-                "Data Type",
-                options=["string", "integer", "double", "boolean", "datetime", "date", "decimal"],
-                help="Change the detected data type"
-            )
-        },
-        use_container_width=True,
-        hide_index=True,
-        key="schema_editor_step2"
-    )
-
     st.divider()
     
-    # ✅ UBAH: Navigation buttons (tidak dalam form)
+    # ============================================
+    # SECTION 2: DATA TYPE MAPPING (SIMPLIFIED TABULAR)
+    # ============================================
+    st.markdown("### 🔧 Map Data Types")
+    st.caption("Define target data type for each column (leave as 'Default' to use auto-detected type)")
+    
+    # Available data types untuk mapping
+    AVAILABLE_TYPES = [
+        "Default",
+        "String",
+        "Integer", 
+        "Long",
+        "Float",
+        "Double",
+        "Decimal",
+        "Boolean",
+        "Date",
+        "Timestamp",
+        "Binary"
+    ]
+    
+    # ✅ FIX: Jangan auto-populate, biarkan kosong
+    if 'type_mapping' not in st.session_state.user_input:
+        st.session_state.user_input['type_mapping'] = {}
+    
+    # ✅ FIX: Buat temporary dict untuk current session
+    current_type_mapping = st.session_state.user_input.get('type_mapping', {})
+    
+    # Create mapping UI in tabular format
+    type_mapping = {}
+    
+    # Tabular layout dengan 2 kolom
+    st.markdown("#### Column Type Configuration")
+    
+    # Create header
+    header_col1, header_col2 = st.columns([2, 1])
+    with header_col1:
+        st.markdown("**Column Name**")
+    with header_col2:
+        st.markdown("**Target Type**")
+    
+    st.markdown("---")
+    
+    # Create rows
+    for col_name in all_columns:
+        col_info = st.session_state.columns_info[col_name]
+        
+        # ✅ FIX: Kalau belum pernah diset, default ke "Default" (index 0)
+        # Kalau udah pernah diset, pakai value yang tersimpan
+        saved_type = current_type_mapping.get(col_name, "Default")
+        
+        # Find index
+        try:
+            current_index = AVAILABLE_TYPES.index(saved_type)
+        except ValueError:
+            current_index = 0  # Fallback to "Default"
+        
+        # Create row with 2 columns
+        row_col1, row_col2 = st.columns([2, 1])
+        
+        with row_col1:
+            # Show column name with inferred type badge
+            inferred_badge = col_info['inferred_type'].capitalize()
+            st.markdown(f"**{col_name}** `{inferred_badge}`")
+        
+        with row_col2:
+            # Selectbox for type mapping
+            selected_type = st.selectbox(
+                f"Type for {col_name}",
+                options=AVAILABLE_TYPES,
+                index=current_index,  # ✅ Ini akan 0 untuk kolom yang belum pernah diubah
+                key=f"type_map_{col_name}",
+                label_visibility="collapsed"
+            )
+            
+            # ✅ FIX: Hanya simpan kalau BUKAN "Default"
+            if selected_type != "Default":
+                type_mapping[col_name] = selected_type
+    
+    st.divider()
+    
+    # ============================================
+    # PREVIEW: JSON OUTPUT (Only non-default values)
+    # ============================================
+    with st.expander("👁️ Preview JSON Output", expanded=False):
+        import json
+        
+        # ✅ type_mapping udah otomatis filtered (tidak ada "Default")
+        output_json = {
+            "key_columns": selected_key_columns,
+            "type_mapping": type_mapping,  # Already filtered
+        }
+        
+        # Optional: Add full metadata if needed
+        if st.checkbox("Include full column metadata", value=False, key="include_metadata_checkbox"):
+            output_json["column_metadata"] = {
+                col_name: {
+                    "source_type": col_info['dtype'],
+                    "inferred_type": col_info['inferred_type'],
+                    "target_type": type_mapping.get(col_name, 'Default'),
+                    "null_count": col_info['null_count'],
+                    "unique_count": col_info['unique_count']
+                }
+                for col_name, col_info in st.session_state.columns_info.items()
+            }
+        
+        st.json(output_json, expanded=True)
+        
+        # Show summary stats
+        total_cols = len(all_columns)
+        custom_cols = len(type_mapping)
+        default_cols = total_cols - custom_cols
+        
+        st.info(f"📊 **Summary:** {total_cols} columns total | {custom_cols} custom types | {default_cols} using default")
+        
+        # Add download button
+        json_str = json.dumps(output_json, indent=2)
+        st.download_button(
+            label="📥 Download JSON",
+            data=json_str,
+            file_name=f"column_mapping_{file_meta['name'].split('.')[0]}.json",
+            mime="application/json",
+            key="download_json_button"
+        )
+    
+    st.divider()
+    
+    # ============================================
+    # NAVIGATION BUTTONS
+    # ============================================
     col_back, col_next = st.columns([1, 1])
     
     with col_back:
-        back_clicked = st.button("← Back", type="secondary", use_container_width=True)
+        back_clicked = st.button("← Back", type="secondary", use_container_width=True, key="back_step2")
     
     with col_next:
-        next_clicked = st.button("Next →", type="primary", use_container_width=True)
+        next_clicked = st.button("Next →", type="primary", use_container_width=True, key="next_step2")
     
     if back_clicked:
-        # ✅ TAMBAHAN: Save current selections before going back
+        # Save current selections before going back
         st.session_state.user_input['key_columns'] = selected_key_columns
+        st.session_state.user_input['type_mapping'] = type_mapping  # ✅ Hanya non-default
         prev_step()
         st.rerun()
     
@@ -513,15 +604,16 @@ elif st.session_state.step == 2:
         if not selected_key_columns:
             st.error("❌ Please select at least one key column")
         else:
-            # Save selected key columns
+            # Save selected key columns and type mapping
             st.session_state.user_input['key_columns'] = selected_key_columns
+            st.session_state.user_input['type_mapping'] = type_mapping  # ✅ Hanya non-default
             
-            st.success(f"✅ Selected {len(selected_key_columns)} key column(s): {', '.join(selected_key_columns)}")
+            st.success(f"✅ Configuration saved!")
+            st.info(f"🔑 {len(selected_key_columns)} key column(s) | 🔧 {len(type_mapping)} custom type(s)")
             
             # Move to next step
             next_step()
             st.rerun()
-
 # ============================================
 # STEP 3: ADDITIONAL CONFIGURATIONS (Placeholder)
 # ============================================
