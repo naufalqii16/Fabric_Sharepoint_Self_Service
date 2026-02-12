@@ -439,20 +439,104 @@ elif st.session_state.step == 2:
         st.dataframe(col_info_df, width='stretch', hide_index=True)
     
     st.divider()
+    all_columns = list(st.session_state.columns_info.keys())
     
+    # Initialize session state
+    if 'ingestion_method' not in st.session_state.user_input:
+        st.session_state.user_input['ingestion_method'] = None
+    if 'key_columns' not in st.session_state.user_input:
+        st.session_state.user_input['key_columns'] = []
+    if 'excluded_columns' not in st.session_state.user_input:
+        st.session_state.user_input['excluded_columns'] = []
+    if 'schedule' not in st.session_state.user_input:
+        st.session_state.user_input['schedule'] = {}
+
+    # ============================================
+    # SECTION 2: COLUMNS EXCLUDE
+    # ============================================
+    st.markdown("### 🚫 Exclude Columns")
+    st.caption("Pilih kolom yang tidak ingin dimasukkan ke dalam database")
+
+    selected_excluded_columns = []
+    num_cols_exclude = 3
+    cols_exclude = st.columns(num_cols_exclude)
+
+    for idx, col_name in enumerate(all_columns):
+        col_info = st.session_state.columns_info[col_name]
+        default_excluded = col_name in st.session_state.user_input.get('excluded_columns', [])
+
+        with cols_exclude[idx % num_cols_exclude]:
+            is_excluded = st.checkbox(
+                f"**{col_name}**",
+                value=default_excluded,
+                key=f"exclude_col_{col_name}",
+                help=f"Type: {col_info['inferred_type']}"
+            )
+            if is_excluded:
+                selected_excluded_columns.append(col_name)
+
+    st.divider()
+
+    st.markdown("### 🗑️ Exclude Rows by Index")
+    st.caption("Masukkan index baris yang ingin dihapus (pisahkan dengan koma)")
+
+    # Initialize hanya kalau belum ada
+    if 'excluded_row_indices' not in st.session_state.user_input:
+        st.session_state.user_input['excluded_row_indices'] = []
+
+    # Text area untuk input indices
+    # ✅ Ambil dari session state
+    current_value = st.session_state.user_input.get('excluded_row_indices', [])
+    default_text = ", ".join(map(str, current_value)) if current_value else ""
+
+    excluded_indices_input = st.text_area(
+        "Row Indices",
+        value=default_text,
+        placeholder="Contoh: 0, 5, 10-15, 20",
+        help="Format: 0, 5, 10-15 (range), 20",
+        key="excluded_row_indices_input"
+    )
+
+    # Parse input
+    excluded_row_indices = []
+    if excluded_indices_input.strip():
+        try:
+            for part in excluded_indices_input.split(','):
+                part = part.strip()
+                if '-' in part:
+                    start, end = map(int, part.split('-'))
+                    excluded_row_indices.extend(range(start, end + 1))
+                else:
+                    excluded_row_indices.append(int(part))
+            
+            excluded_row_indices = sorted(set(excluded_row_indices))
+            
+            # ✅ SAVE KE SESSION STATE LANGSUNG
+            st.session_state.user_input['excluded_row_indices'] = excluded_row_indices
+            
+            st.success(f"✅ {len(excluded_row_indices)} rows akan di-exclude")
+        except:
+            st.error("❌ Format tidak valid")
+            # ✅ Kalau error, kosongkan
+            st.session_state.user_input['excluded_row_indices'] = []
+    else:
+        # ✅ Kalau kosong, hapus dari session state
+        st.session_state.user_input['excluded_row_indices'] = []
+
+    # Preview excluded rows
+    if excluded_row_indices:
+        with st.expander("👁️ Preview Excluded Rows"):
+            try:
+                df = st.session_state.df_preview.iloc[excluded_row_indices]
+                st.dataframe(df)
+            except:
+                st.warning("⚠️ Beberapa index melebihi jumlah baris data")
     # ============================================
     # SECTION 1: KEY COLUMNS SELECTION
     # ============================================
     st.markdown("### ⚙️ Method Ingestion")
     st.caption("Pilih metode ingestion yang akan digunakan")
 
-    # Initialize session state
-    if 'ingestion_method' not in st.session_state.user_input:
-        st.session_state.user_input['ingestion_method'] = None
-    if 'key_columns' not in st.session_state.user_input:
-        st.session_state.user_input['key_columns'] = []
-    if 'schedule' not in st.session_state.user_input:
-        st.session_state.user_input['schedule'] = {}
 
     # Pilih method ingestion
     ingestion_method = st.radio(
@@ -467,7 +551,6 @@ elif st.session_state.step == 2:
     )
 
     selected_key_columns = []
-    all_columns = list(st.session_state.columns_info.keys())
 
     if ingestion_method == "Delete-Insert":
         st.divider()
@@ -494,6 +577,7 @@ elif st.session_state.step == 2:
                     selected_key_columns.append(col_name)
 
         st.divider()
+
 
     # --- Schedule (selalu muncul) ---
     st.markdown("### 🗓️ Schedule Ingestion")
@@ -527,7 +611,7 @@ elif st.session_state.step == 2:
     st.divider()
     
     # ============================================
-    # SECTION 2: DATA TYPE MAPPING (SIMPLIFIED TABULAR)
+    # SECTION 3: DATA TYPE MAPPING (SIMPLIFIED TABULAR)
     # ============================================
     st.markdown("### 🔧 Map Data Types")
     st.caption("Define target data type for each column (leave as 'Default' to use auto-detected type)")
@@ -613,9 +697,13 @@ elif st.session_state.step == 2:
         # ✅ type_mapping udah otomatis filtered (tidak ada "Default")
         output_json = {
             "key_columns": selected_key_columns,
+            "ListColumnsExclude": selected_excluded_columns,
             "type_mapping": type_mapping,  # Already filtered
         }
         
+        if excluded_row_indices:
+            output_json["RowsToDelete"] = excluded_row_indices
+    
         # Optional: Add full metadata if needed
         if st.checkbox("Include full column metadata", value=False, key="include_metadata_checkbox"):
             output_json["column_metadata"] = {
@@ -633,10 +721,12 @@ elif st.session_state.step == 2:
         
         # Show summary stats
         total_cols = len(all_columns)
+        excluded_cols = len(selected_excluded_columns)
         custom_cols = len(type_mapping)
-        default_cols = total_cols - custom_cols
+        default_cols = total_cols - custom_cols - excluded_cols
+        excluded_rows = len(excluded_row_indices)
         
-        st.info(f"📊 **Summary:** {total_cols} columns total | {custom_cols} custom types | {default_cols} using default")
+        st.info(f"📊 **Summary:** {total_cols} columns total | {excluded_cols} excluded | {custom_cols} custom types | {default_cols} using default | {excluded_rows} rows to delete")
         
         # Add download button
         json_str = json.dumps(output_json, indent=2)
@@ -664,6 +754,7 @@ elif st.session_state.step == 2:
     if back_clicked:
         # Save current selections before going back
         st.session_state.user_input['key_columns'] = selected_key_columns
+        st.session_state.user_input['excluded_columns'] = selected_excluded_columns
         st.session_state.user_input['type_mapping'] = type_mapping  # ✅ Hanya non-default
         prev_step()
         st.rerun()
@@ -675,6 +766,7 @@ elif st.session_state.step == 2:
             st.error("❌ Please select at least one key column")
         else:
             st.session_state.user_input['ingestion_method'] = ingestion_method
+            st.session_state.user_input['excluded_columns'] = selected_excluded_columns
             st.session_state.user_input['type_mapping'] = type_mapping
 
             # ✅ Schedule selalu disimpan
@@ -703,29 +795,30 @@ elif st.session_state.step == 3:
                       "SILVER_LH_HIS_IMPORT-SILVER", 
                       "SILVER_LH_SPECTRA", 
                       "SILVER_LH_P_FINANCE_DEV"]
+    
+    schema_options = ["dbo"]
     # st.markdown("### 📍 Destination")
     # target_destination = st.text_input("Target Destination", key="key_target_destination")
 
     if 'dest_config' not in st.session_state.user_input:
         st.session_state.user_input['dest_config'] = {
-            'target_schema':'dbo',
+            'target_schema': schema_options[0] if schema_options else "",
             'target_dest': fabric_options[0] if fabric_options else "",
             'table_name': '',
             'pic_name': ''
         }
+
+    if 'target_schema' not in st.session_state.user_input['dest_config']:
+        st.session_state.user_input['dest_config']['target_schema'] = 'dbo'
+
     dest_val = st.session_state.user_input['dest_config']
+
     with st.container(border=True):
         st.markdown("### 🏢 Target Destination")
         
         # Target Destination (Searchable Dropdown)
         # index=[...].index() digunakan agar pilihan user 'nempel' saat bolak-balik page
-        col_schema, col_dest = st.columns([1,3])
-        with col_schema:
-            target_schema = st.text_input(
-                "Target Schema*",
-                value= dest_val['target_schema'],
-                key="sb_target_schema"
-            )
+        col_dest, col_schema = st.columns([3,2])
             # st.caption("ℹ️ *Search by typing the name in the box above*")
         with col_dest:
             target_destination = st.selectbox(
@@ -737,6 +830,14 @@ elif st.session_state.step == 3:
             )
             st.caption("ℹ️ *Search by typing the name in the box above*")
 
+        with col_schema:
+            target_schema = st.selectbox(
+                "Target Schema*",
+                options=schema_options,
+                index=schema_options.index(dest_val['target_schema']) if dest_val['target_schema'] in schema_options else 0,
+                help="Type to search: e.g. 'dbo'",
+                key="sb_target_schema"
+            )
 
         # Final Table Name
         table_name = st.text_input(
@@ -786,7 +887,15 @@ elif st.session_state.step == 3:
         keys = user_input.get('key_columns', [])
         key_text = ", ".join(keys) if keys else "—"
 
+        excluded_cols = user_input.get('excluded_columns', [])
+        excluded_cols_text = ", ".join(excluded_cols) if excluded_cols else "—"
+
+        excluded_rows = user_input.get('excluded_row_indices', [])
+        excluded_rows_count = len(excluded_rows) if excluded_rows else 0
+        excluded_rows_text = f"{excluded_rows_count} rows" if excluded_rows else "—"
+
         total_cols = len(st.session_state.columns_info) if st.session_state.columns_info is not None else 0
+        active_cols = total_cols - len(excluded_cols)
 
         ingestion_method = user_input.get('ingestion_method', '—')
         schedule = user_input.get('schedule', {})
@@ -800,10 +909,12 @@ elif st.session_state.step == 3:
             schedule_text = "—"
 
         st.success(f"""
-        **Total Columns:** `{total_cols}`  
+        **Total Columns:** `{total_cols}` ({active_cols} active, {len(excluded_cols)} excluded)  
+        **Excluded Columns:** `{excluded_cols_text}`  
         **Ingestion Method:** `{ingestion_method}`  
-        **Primary Keys:** `{key_text}`  
-        **Schedule:** `{schedule_text}`
+        **Composite Keys:** `{key_text}`  
+        **Schedule:** `{schedule_text}`  
+        **Rows to Delete:** `{excluded_rows_text}`
         """)
 
         st.markdown("##### 🎯 Destination")
@@ -812,6 +923,7 @@ elif st.session_state.step == 3:
         
         st.warning(f"""
         **Target:** `{target_destination}`  
+        **Schema:** `{target_schema}`  
         **Table:** `{table_name if table_name else 'Wait for input...'}`  
         **PIC:** `{pic_name if pic_name else 'Wait for input...'}`
         """)
@@ -819,6 +931,7 @@ elif st.session_state.step == 3:
     with summ_col2:
 
         type_mapping = user_input.get("type_mapping", {})
+
 
         # ===== Detailed Mapping
         if type_mapping:
@@ -835,17 +948,6 @@ elif st.session_state.step == 3:
                 st.dataframe(mapping_df, use_container_width=True)
         else:
             st.caption("All columns using default data type")
-
-    st.markdown("##### 🎯 Destination")
-    # Ambil data dari dest_config yang kita buat tadi
-    dest = user_input.get('dest_config', {})
-    
-    st.warning(f"""
-    **Schema:** `{target_schema}`  
-    **Target:** `{target_destination}`  
-    **Table:** `{table_name if table_name else 'Wait for input...'}`  
-    **PIC:** `{pic_name if pic_name else 'Wait for input...'}`
-    """)
     
     st.divider()
     
@@ -864,12 +966,75 @@ elif st.session_state.step == 3:
     with col_submit:
         if st.button("🚀 Submit to Fabric", type="primary", width='stretch'):
             st.session_state.user_input['dest_config'] = {
-            'target_dest': target_destination,
-            'table_name': table_name,
-            'pic_name': pic_name
+                'target_dest': target_destination,
+                'target_schema': target_schema,
+                'table_name': table_name,
+                'pic_name': pic_name
             }
             st.success("✅ Configuration submitted!")
             st.balloons()
+            
+            # ============================================
+            # PRINT ALL USER INPUT TO TERMINAL
+            # ============================================
+            print("\n" + "="*60)
+            print("🚀 FABRIC SUBMISSION - USER INPUT")
+            print("="*60)
+            
+            user_input = st.session_state.user_input
+            
+            # File Info
+            print("\n📄 FILE INFORMATION:")
+            file_data = st.session_state.file_data
+            print(f"  File Name: {file_data.get('name', 'N/A')}")
+            print(f"  File Size: {file_data.get('size', 'N/A')} bytes")
+            
+            # Ingestion Method
+            print("\n⚙️ INGESTION CONFIGURATION:")
+            print(f"  Method: {user_input.get('ingestion_method', 'N/A')}")
+            
+            # Key Columns (list)
+            key_columns = user_input.get('key_columns', [])
+            print(f"  Key Columns: {key_columns}")
+            
+            # Excluded Columns (list)
+            excluded_columns = user_input.get('excluded_columns', [])
+            print(f"  Excluded Columns: {excluded_columns}")
+            
+            # Rows to Delete (list)
+            rows_to_delete = user_input.get('excluded_row_indices', [])
+            print(f"  Rows to Delete: {rows_to_delete}")
+            
+            # Schedule (dict)
+            schedule = user_input.get('schedule', {})
+            print(f"  Schedule: {schedule}")
+            
+            # Type Mapping (dict)
+            type_mapping = user_input.get('type_mapping', {})
+            print(f"\n🔧 TYPE MAPPING:")
+            if type_mapping:
+                for col_name, col_type in type_mapping.items():
+                    print(f"    {col_name}: {col_type}")
+            else:
+                print("    (No custom type mappings)")
+            
+            # Destination Config
+            dest_config = user_input.get('dest_config', {})
+            print(f"\n🎯 DESTINATION:")
+            print(f"  Target: {dest_config.get('target_dest', 'N/A')}")
+            print(f"  Schema Name: {dest_config.get('target_schema', 'N/A')}")
+            print(f"  Table Name: {dest_config.get('table_name', 'N/A')}")
+            print(f"  PIC Name: {dest_config.get('pic_name', 'N/A')}")
+            
+            # Full JSON Output
+            print(f"\n📋 FULL JSON OUTPUT:")
+            import json
+            print(json.dumps(user_input, indent=2))
+            
+            print("\n" + "="*60)
+            print("✅ SUBMISSION COMPLETE")
+            print("="*60 + "\n")
+            
             # TODO: Send to Fabric Pipeline here
     
     with col_reset:
