@@ -443,40 +443,87 @@ elif st.session_state.step == 2:
     # ============================================
     # SECTION 1: KEY COLUMNS SELECTION
     # ============================================
-    st.markdown("### 🔑 Select Key Columns")
-    st.caption("Key columns uniquely identify each row (like primary keys)")
-    
-    # Get all column names
-    all_columns = list(st.session_state.columns_info.keys())
-    
-    # Initialize selected_key_columns dari session state (jika ada)
+    st.markdown("### ⚙️ Method Ingestion")
+    st.caption("Pilih metode ingestion yang akan digunakan")
+
+    # Initialize session state
+    if 'ingestion_method' not in st.session_state.user_input:
+        st.session_state.user_input['ingestion_method'] = None
     if 'key_columns' not in st.session_state.user_input:
         st.session_state.user_input['key_columns'] = []
-    
+    if 'schedule' not in st.session_state.user_input:
+        st.session_state.user_input['schedule'] = {}
+
+    # Pilih method ingestion
+    ingestion_method = st.radio(
+        "Method Ingestion",
+        options=["Delete-Insert", "Truncate-Insert / Full Load"],
+        index=0 if st.session_state.user_input.get('ingestion_method') == "Delete-Insert"
+            else 1 if st.session_state.user_input.get('ingestion_method') == "Truncate-Insert / Full Load"
+            else 0,
+        key="ingestion_method_radio",
+        horizontal=True,
+        label_visibility="collapsed"
+    )
+
     selected_key_columns = []
-    
-    # Create checkboxes in a grid layout
-    num_cols = 3
-    cols = st.columns(num_cols)
-    
-    for idx, col_name in enumerate(all_columns):
-        col_info = st.session_state.columns_info[col_name]
+    all_columns = list(st.session_state.columns_info.keys())
+
+    if ingestion_method == "Delete-Insert":
+        st.divider()
+
+        # --- Key Columns ---
+        st.markdown("### 🔑 Select Key Columns")
+        st.caption("Key columns uniquely identify each row (like primary keys)")
+
+        num_cols = 3
+        cols = st.columns(num_cols)
+
+        for idx, col_name in enumerate(all_columns):
+            col_info = st.session_state.columns_info[col_name]
+            default_checked = col_name in st.session_state.user_input.get('key_columns', [])
+
+            with cols[idx % num_cols]:
+                is_selected = st.checkbox(
+                    f"**{col_name}**",
+                    value=default_checked,
+                    key=f"key_col_{col_name}",
+                    help=f"Type: {col_info['inferred_type']} | Unique: {col_info['unique_count']}"
+                )
+                if is_selected:
+                    selected_key_columns.append(col_name)
+
+        st.divider()
+
+    # --- Schedule (selalu muncul) ---
+    st.markdown("### 🗓️ Schedule Ingestion")
+    st.caption("Tentukan kapan data dimasukkan secara berkala")
+
+    freq_options = ["daily", "weekly", "monthly"]
+
+    # ✅ Fix: baca dari format { "daily": "02:00:00" } bukan { "frequency": ..., "time": ... }
+    saved_schedule = st.session_state.user_input.get('schedule', {})
+    saved_freq = list(saved_schedule.keys())[0] if saved_schedule else 'daily'
+    saved_time = list(saved_schedule.values())[0] if saved_schedule else '02:00:00'
+
+    frequency = st.selectbox(
+        "Frekuensi",
+        options=freq_options,
+        index=freq_options.index(saved_freq) if saved_freq in freq_options else 0,
+        key="schedule_frequency"
+    )
+
+    import datetime
+    run_time = st.time_input(
+        "Jam Mulai",
+        value=datetime.time(
+            int(saved_time.split(':')[0]),
+            int(saved_time.split(':')[1])
+        ),
+        key="schedule_time",
+        step=60 * 30
+    )
         
-        # Check if this column was previously selected
-        default_checked = col_name in st.session_state.user_input.get('key_columns', [])
-        
-        # Put checkbox in appropriate column
-        with cols[idx % num_cols]:
-            is_selected = st.checkbox(
-                f"**{col_name}**",
-                value=default_checked,
-                key=f"key_col_{col_name}",
-                help=f"Type: {col_info['inferred_type']} | Unique: {col_info['unique_count']}"
-            )
-            
-            if is_selected:
-                selected_key_columns.append(col_name)
-    
     st.divider()
     
     # ============================================
@@ -488,16 +535,13 @@ elif st.session_state.step == 2:
     # Available data types untuk mapping
     AVAILABLE_TYPES = [
         "Default",
-        "String",
-        "Integer", 
-        "Long",
-        "Float",
-        "Double",
-        "Decimal",
-        "Boolean",
-        "Date",
-        "Timestamp",
-        "Binary"
+        "date",
+        "datetime",
+        "int",
+        "bigint",
+        "float",
+        "string",
+        "varchar",
     ]
     
     # ✅ FIX: Jangan auto-populate, biarkan kosong
@@ -625,17 +669,27 @@ elif st.session_state.step == 2:
         st.rerun()
     
     if next_clicked:
-        if not selected_key_columns:
+        is_delete_insert = ingestion_method == "Delete-Insert"
+
+        if is_delete_insert and not selected_key_columns:
             st.error("❌ Please select at least one key column")
         else:
-            # Save selected key columns and type mapping
-            st.session_state.user_input['key_columns'] = selected_key_columns
-            st.session_state.user_input['type_mapping'] = type_mapping  # ✅ Hanya non-default
-            
+            st.session_state.user_input['ingestion_method'] = ingestion_method
+            st.session_state.user_input['type_mapping'] = type_mapping
+
+            # ✅ Schedule selalu disimpan
+            time_str = run_time.strftime("%H:%M:%S")
+            st.session_state.user_input['schedule'] = {
+                frequency: time_str
+            }
+
+            if is_delete_insert:
+                st.session_state.user_input['key_columns'] = selected_key_columns
+            else:
+                st.session_state.user_input['key_columns'] = []
+
             st.success(f"✅ Configuration saved!")
-            st.info(f"🔑 {len(selected_key_columns)} key column(s) | 🔧 {len(type_mapping)} custom type(s)")
             
-            # Move to next step
             next_step()
             st.rerun()
 # ============================================
@@ -727,20 +781,60 @@ elif st.session_state.step == 3:
         **Sheet:** `{user_input.get('sheet_name') or 'Default'}`
         """)
 
-    with summ_col2:
         st.markdown("##### 🔑 Key & Schema")
-        # Ambil info key columns
+
         keys = user_input.get('key_columns', [])
-        key_text = ", ".join(keys) if keys else "None selected"
-        
-        # Hitung total kolom dari columns_info
+        key_text = ", ".join(keys) if keys else "—"
+
         total_cols = len(st.session_state.columns_info) if st.session_state.columns_info is not None else 0
-        
+
+        ingestion_method = user_input.get('ingestion_method', '—')
+        schedule = user_input.get('schedule', {})
+
+        # Format schedule: { "daily": "02:00:00" } → "daily @ 02:00:00"
+        if schedule:
+            freq = list(schedule.keys())[0]
+            time_val = list(schedule.values())[0]
+            schedule_text = f"{freq} @ {time_val}"
+        else:
+            schedule_text = "—"
+
         st.success(f"""
         **Total Columns:** `{total_cols}`  
-        **Primary Keys:** `{key_text}`
+        **Ingestion Method:** `{ingestion_method}`  
+        **Primary Keys:** `{key_text}`  
+        **Schedule:** `{schedule_text}`
         """)
 
+        st.markdown("##### 🎯 Destination")
+        # Ambil data dari dest_config yang kita buat tadi
+        dest = user_input.get('dest_config', {})
+        
+        st.warning(f"""
+        **Target:** `{target_destination}`  
+        **Table:** `{table_name if table_name else 'Wait for input...'}`  
+        **PIC:** `{pic_name if pic_name else 'Wait for input...'}`
+        """)
+
+    with summ_col2:
+
+        type_mapping = user_input.get("type_mapping", {})
+
+        # ===== Detailed Mapping
+        if type_mapping:
+            st.markdown("###### 📑 Data Type Mapping")
+            # st.caption("Other columns using default data type")
+
+            mapping_df = [
+                {"Column Name": col, "Data Type": dtype}
+                for col, dtype in type_mapping.items()
+            ]
+
+            # st.dataframe(mapping_df, use_container_width=True)
+            with st.expander("📑 View Full Schema Mapping"):
+                st.dataframe(mapping_df, use_container_width=True)
+        else:
+            st.caption("All columns using default data type")
 
     st.markdown("##### 🎯 Destination")
     # Ambil data dari dest_config yang kita buat tadi
