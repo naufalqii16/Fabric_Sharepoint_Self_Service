@@ -89,7 +89,8 @@ def reset_app():
         'delimiter': ',',
         'sheet_name': '',
         'header_row': 0,
-        'need_backup': False
+        'need_backup': False,
+        'backup_path': ''
     }
 
 # ✅ UBAH: Fungsi reset_page2_data (hanya reset page 2, form step 1 tetap)
@@ -125,8 +126,8 @@ def process_user_input():
             
             # Step 3: Get file metadata
             file_meta = sp_service.get_file_metadata(
-                FolderPath=user_input['folder_path'],
-                FilePattern=user_input['file_name']
+                FolderPath=user_input['folder_path'].strip(),
+                FilePattern=user_input['file_name'].strip()
             )
             
             st.success(f"✅ File found: {file_meta['name']}")
@@ -144,7 +145,7 @@ def process_user_input():
                 delimiter_map = {
                     ',': 'comma',
                     ';': 'semicolon',
-                    '\t': 'tab',
+                    '\\tab': 'tab',
                     '|': 'pipe'
                 }
                 csv_delimiter = delimiter_map.get(user_input.get('delimiter', ','), 'comma')
@@ -255,7 +256,7 @@ if st.session_state.step == 1:
         with c1:
             delimiter = st.selectbox(
                 "Delimiter", 
-                [",", ";", "\t", "|", "Custom"],
+                [",", ";", "\\tab", "|", "Custom"],
                 key="input_delimiter"
             )
         with c2:
@@ -268,7 +269,7 @@ if st.session_state.step == 1:
                     st.warning("⚠️ Custom delimiter cannot be empty!")
     
     # Additional file options
-    col3, col4, col5 = st.columns(3)
+    col3, col4 = st.columns(2)
     
     with col3:
         sheet_name = st.text_input(
@@ -287,7 +288,7 @@ if st.session_state.step == 1:
             help="Row index where column headers are (0-indexed)",
             key="input_header_row"
         )
-    
+    col5, col6 = st.columns([1,3])
     with col5:
         st.markdown("<div style='padding-top: 32px;'></div>", unsafe_allow_html=True)
         need_backup = st.checkbox(
@@ -296,6 +297,14 @@ if st.session_state.step == 1:
             help="Create backup copy before reading",
             key="input_need_backup"
         )
+    with col6:
+        curr_backup_path = form_vals.get('backup_path', '')
+        backup_path = st.text_input("Backup Path", 
+                                    value=curr_backup_path,
+                                    disabled= not need_backup,
+                                    placeholder="Enter backup path..." if need_backup else "Checkbox disabled",
+                                    help= "Path for backup",
+                                    key="input_backup_path")
     
     st.divider()
     
@@ -341,7 +350,8 @@ if st.session_state.step == 1:
             'delimiter': custom_delimiter if delimiter == "Custom" else delimiter,
             'sheet_name': sheet_name,
             'header_row': header_row,
-            'need_backup': need_backup
+            'need_backup': need_backup,
+            'backup_path': backup_path if need_backup else ''
         }
         
         # Save to user_input
@@ -359,6 +369,19 @@ if st.session_state.step == 1:
     
     # ✅ TAMBAHAN: Handle Next button click
     if next_clicked:
+        st.session_state.form_values = {
+            'sp_url': sp_url,
+            'folder_path': folder_path,
+            'file_name': file_name,
+            'extension': extension,
+            'delimiter': custom_delimiter if delimiter == "Custom" else delimiter,
+            'sheet_name': sheet_name,
+            'header_row': header_row,
+            'need_backup': need_backup,
+            'backup_path': backup_path if need_backup else ''
+        }
+        # Update user_input juga agar sinkron
+        st.session_state.user_input.update(st.session_state.form_values)
         next_step()
         st.rerun()
     
@@ -394,7 +417,7 @@ elif st.session_state.step == 2:
         if st.session_state.df_preview is not None:
             st.dataframe(
                 st.session_state.df_preview,
-                use_container_width=True,
+                width='stretch',
                 height=300
             )
     
@@ -413,7 +436,7 @@ elif st.session_state.step == 2:
             })
         
         col_info_df = pd.DataFrame(col_info_list)
-        st.dataframe(col_info_df, use_container_width=True, hide_index=True)
+        st.dataframe(col_info_df, width='stretch', hide_index=True)
     
     st.divider()
     
@@ -626,10 +649,12 @@ elif st.session_state.step == 3:
                       "SILVER_LH_HIS_IMPORT-SILVER", 
                       "SILVER_LH_SPECTRA", 
                       "SILVER_LH_P_FINANCE_DEV"]
-    st.markdown("### 📍 Destination")
+    # st.markdown("### 📍 Destination")
     # target_destination = st.text_input("Target Destination", key="key_target_destination")
+
     if 'dest_config' not in st.session_state.user_input:
         st.session_state.user_input['dest_config'] = {
+            'target_schema':'dbo',
             'target_dest': fabric_options[0] if fabric_options else "",
             'table_name': '',
             'pic_name': ''
@@ -640,23 +665,39 @@ elif st.session_state.step == 3:
         
         # Target Destination (Searchable Dropdown)
         # index=[...].index() digunakan agar pilihan user 'nempel' saat bolak-balik page
-        target_destination = st.selectbox(
-            "Target Destination (Search & Select)*",
-            options=fabric_options,
-            index=fabric_options.index(dest_val['target_dest']) if dest_val['target_dest'] in fabric_options else 0,
-            help="Type to search: e.g. 'Marketing', 'Finance', 'Legacy_DB'",
-            key="sb_target_dest"
-        )
-        st.caption("ℹ️ *Search by typing the name in the box above*")
+        col_schema, col_dest = st.columns([1,3])
+        with col_schema:
+            target_schema = st.text_input(
+                "Target Schema*",
+                value= dest_val['target_schema'],
+                key="sb_target_schema"
+            )
+            # st.caption("ℹ️ *Search by typing the name in the box above*")
+        with col_dest:
+            target_destination = st.selectbox(
+                "Target Destination (Search & Select)*",
+                options=fabric_options,
+                index=fabric_options.index(dest_val['target_dest']) if dest_val['target_dest'] in fabric_options else 0,
+                help="Type to search: e.g. 'Marketing', 'Finance', 'Legacy_DB'",
+                key="sb_target_dest"
+            )
+            st.caption("ℹ️ *Search by typing the name in the box above*")
+
 
         # Final Table Name
         table_name = st.text_input(
             "Final Table Name*",
             value=dest_val['table_name'],
-            placeholder="e.g., stg_sales_report_daily",
+            placeholder="start with Excel_",
             help="This name will be used as the table name in the target database",
             key="ti_table_name"
         )
+        is_prefix_valid = table_name.startswith("Excel_")
+        
+        if table_name and not is_prefix_valid:
+            st.warning("⚠️ **Invalid Name:** Table name must start with the prefix `Excel_` (e.g., Excel_MyData)")
+        elif table_name and is_prefix_valid:
+            st.success("✅ **Valid Name:** Prefix matches requirements.")
 
         # Configurator Name (PIC)
         pic_name = st.text_input(
@@ -706,6 +747,7 @@ elif st.session_state.step == 3:
     dest = user_input.get('dest_config', {})
     
     st.warning(f"""
+    **Schema:** `{target_schema}`  
     **Target:** `{target_destination}`  
     **Table:** `{table_name if table_name else 'Wait for input...'}`  
     **PIC:** `{pic_name if pic_name else 'Wait for input...'}`
@@ -749,7 +791,7 @@ with st.sidebar:
     st.write(f"Current Step: {st.session_state.step}")
     st.write(f"Data Fetched: {'Yes' if st.session_state.data_fetched else 'No'}")  # ✅ UBAH
     st.write(f"Data Loaded: {'Yes' if st.session_state.columns_info else 'No'}")
-    
+
     if st.session_state.columns_info:
         st.write(f"Total Columns: {len(st.session_state.columns_info)}")
     
