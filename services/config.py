@@ -1,5 +1,6 @@
 import os
 from dotenv import load_dotenv
+import json
 
 load_dotenv()
 
@@ -19,9 +20,17 @@ DEV_WS_ID = os.getenv('DEV_WS_ID')
 LAKEHOUSE_ID = os.getenv('LAKEHOUSE_ID')
 FABRIC_API_URL = "https://api.fabric.microsoft.com/v1"
 
+# WIP SpreadSheet
+WIP_ID = os.getenv('WIP_ID')
+EXCEL_CONFIG_GID = os.getenv('EXCEL_CONFIG_GID')
+SHEET_NAME = os.getenv('SHEET_NAME')
+
 # API Scopes
 GRAPH_SCOPE = "https://graph.microsoft.com/.default"
 # FABRIC_SCOPE = "https://analysis.windows.net/powerbi/api/.default"
+TOKEN_DATA = json.loads(os.getenv('GOOGLE_TOKEN'))
+SPREADSHEET_SCOPE = ['https://www.googleapis.com/auth/spreadsheets']
+
 
 def validate_config():
     """Validate all required config"""
