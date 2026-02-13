@@ -61,7 +61,8 @@ if 'form_values' not in st.session_state:
         'delimiter': ',',
         'sheet_name': '',
         'header_row': 0,
-        'need_backup': False
+        'need_backup': False,
+        'backup_path': ''
     }
 
 # ============================================
@@ -559,10 +560,12 @@ elif st.session_state.step == 2:
         st.markdown("### 🔑 Select Key Columns")
         st.caption("Key columns uniquely identify each row (like primary keys)")
 
+        filtered_columns = [col for col in all_columns if col not in selected_excluded_columns]
+
         num_cols = 3
         cols = st.columns(num_cols)
 
-        for idx, col_name in enumerate(all_columns):
+        for idx, col_name in enumerate(filtered_columns):
             col_info = st.session_state.columns_info[col_name]
             default_checked = col_name in st.session_state.user_input.get('key_columns', [])
 
