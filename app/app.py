@@ -1,24 +1,29 @@
-# app/app.py
 import sys
 import os
+current_file = os.path.abspath(__file__)
+app_dir = os.path.dirname(current_file)
+root_dir = os.path.dirname(app_dir)
+sys.path.insert(0, root_dir)
+# app/app.py
+import streamlit as st
+import json
+from services.auth import auth
+from googleapiclient.discovery import build
+import pandas as pd
+from datetime import datetime
+from services.config import SITE_ID, DRIVE_ID, validate_config, WIP_ID, EXCEL_CONFIG_GID, SHEET_NAME
+from services.sharepoint_services import SharePointService
+from services.preprocessing import process_file_to_dataframe, extract_columns_metadata
+from google.auth.transport.requests import Request
+from google.oauth2.credentials import Credentials
+from googleapiclient.discovery import build
 
 # ============================================
 # FIX PYTHON PATH
 # ============================================
-current_file = os.path.abspath(__file__)
-app_dir = os.path.dirname(current_file)
-root_dir = os.path.dirname(app_dir)
 
 if root_dir not in sys.path:
     sys.path.insert(0, root_dir)
-
-# ============================================
-# IMPORTS
-# ============================================
-import streamlit as st
-from services.config import SITE_ID, DRIVE_ID, validate_config
-from services.sharepoint_services import SharePointService
-from services.preprocessing import process_file_to_dataframe, extract_columns_metadata
 
 # ============================================
 # PAGE CONFIG
@@ -973,72 +978,133 @@ elif st.session_state.step == 3:
                 'table_name': table_name,
                 'pic_name': pic_name
             }
-            st.success("✅ Configuration submitted!")
-            st.balloons()
-            
-            # ============================================
-            # PRINT ALL USER INPUT TO TERMINAL
-            # ============================================
-            print("\n" + "="*60)
-            print("🚀 FABRIC SUBMISSION - USER INPUT")
-            print("="*60)
-            
-            user_input = st.session_state.user_input
-            
-            # File Info
-            print("\n📄 FILE INFORMATION:")
-            file_data = st.session_state.file_data
-            print(f"  File Name: {file_data.get('name', 'N/A')}")
-            print(f"  File Size: {file_data.get('size', 'N/A')} bytes")
-            
-            # Ingestion Method
-            print("\n⚙️ INGESTION CONFIGURATION:")
-            print(f"  Method: {user_input.get('ingestion_method', 'N/A')}")
-            
-            # Key Columns (list)
-            key_columns = user_input.get('key_columns', [])
-            print(f"  Key Columns: {key_columns}")
-            
-            # Excluded Columns (list)
-            excluded_columns = user_input.get('excluded_columns', [])
-            print(f"  Excluded Columns: {excluded_columns}")
-            
-            # Rows to Delete (list)
-            rows_to_delete = user_input.get('excluded_row_indices', [])
-            print(f"  Rows to Delete: {rows_to_delete}")
-            
-            # Schedule (dict)
-            schedule = user_input.get('schedule', {})
-            print(f"  Schedule: {schedule}")
-            
-            # Type Mapping (dict)
-            type_mapping = user_input.get('type_mapping', {})
-            print(f"\n🔧 TYPE MAPPING:")
-            if type_mapping:
-                for col_name, col_type in type_mapping.items():
-                    print(f"    {col_name}: {col_type}")
-            else:
-                print("    (No custom type mappings)")
-            
-            # Destination Config
-            dest_config = user_input.get('dest_config', {})
-            print(f"\n🎯 DESTINATION:")
-            print(f"  Target: {dest_config.get('target_dest', 'N/A')}")
-            print(f"  Schema Name: {dest_config.get('target_schema', 'N/A')}")
-            print(f"  Table Name: {dest_config.get('table_name', 'N/A')}")
-            print(f"  PIC Name: {dest_config.get('pic_name', 'N/A')}")
-            
-            # Full JSON Output
-            print(f"\n📋 FULL JSON OUTPUT:")
-            import json
-            print(json.dumps(user_input, indent=2))
-            
-            print("\n" + "="*60)
-            print("✅ SUBMISSION COMPLETE")
-            print("="*60 + "\n")
-            
-            # TODO: Send to Fabric Pipeline here
-    
+
+            try:
+                user_input = st.session_state.user_input
+                dest_config = user_input.get('dest_config', {})
+                form_values = st.session_state.get('form_values', {})
+
+                # ---- Ambil nilai dari session state ----
+                type_mapping = user_input.get('type_mapping', {})
+                key_columns = user_input.get('key_columns', [])
+                excluded_columns = user_input.get('excluded_columns', [])
+                rows_to_delete = user_input.get('excluded_row_indices', [])
+
+                # ---- Form values ----
+                file_name = form_values.get('file_name', '')
+                sp_url = form_values.get('sp_url', 'NULL')
+                folder_path = form_values.get('folder_path', 'NULL')
+                sheet_name = form_values.get('sheet_name', 'NULL')
+                csv_delimiter = form_values.get('delimiter') or 'NULL'
+                need_backup = form_values.get('need_backup', False)
+                backup_path = form_values.get('backup_path', '')
+                header_row = form_values.get('header_row', 0)
+                schedule_spreadsheet = json.dumps(user_input.get('schedule', {})) if user_input.get('schedule') else 'NULL'
+
+                # ---- Derived values ----
+                key_columns_str = ', '.join(key_columns) if key_columns else 'NULL'
+                rows_to_delete_str = ', '.join(str(r) for r in rows_to_delete) if rows_to_delete else 'NULL'
+
+                df_columns = list(st.session_state.columns_info.keys())
+                excluded_indices = [str(df_columns.index(col) + 1) for col in excluded_columns if col in df_columns]
+                excluded_columns_str = ', '.join(excluded_indices) if excluded_indices else 'NULL'
+
+                target_dest = dest_config.get('target_dest', '')
+                fwk_target_id = 200 if target_dest == 'SILVER_LH_P_FINANCE_DEV' else 101010
+                need_backup_val = 'Y' if need_backup else 'N'
+                backup_folder_path = backup_path if need_backup else 'NULL'
+                pic_name_val = dest_config.get('pic_name', '')
+
+                ingestion_method_raw = user_input.get('ingestion_method', 'Full-Load')
+                ingestion_mode = 'Full-Load' if 'Full-Load' in ingestion_method_raw or 'Full Load' in ingestion_method_raw else ingestion_method_raw
+
+                now = datetime.now()
+                last_modified_date = f"{now.month}/{now.day}/{now.year} {now.strftime('%H:%M:%S')}"
+
+                # ---- Ambil max ExcelConfigId dari spreadsheet ----
+                csv_url = f"https://docs.google.com/spreadsheets/d/{WIP_ID}/export?format=csv&gid={EXCEL_CONFIG_GID}"
+                df = pd.read_csv(csv_url)
+                max_id = int(df['ExcelConfigId'].max()) + 1
+
+                # ---- Print to terminal ----
+                print("\n" + "="*60)
+                print("🚀 FABRIC SUBMISSION - USER INPUT")
+                print("="*60)
+                print(f"  max_id:               {max_id}")
+                print(f"  file_name:            {file_name}")
+                print(f"  sp_url:               {sp_url}")
+                print(f"  folder_path:          {folder_path}")
+                print(f"  sheet_name:           {sheet_name}")
+                print(f"  csv_delimiter:        {csv_delimiter}")
+                print(f"  header_row:           {header_row + 1}")
+                print(f"  key_columns:          {key_columns_str}")
+                print(f"  excluded_columns:     {excluded_columns_str}")
+                print(f"  rows_to_delete:       {rows_to_delete_str}")
+                print(f"  type_mapping:         {json.dumps(type_mapping) if type_mapping else 'NULL'}")
+                print(f"  ingestion_mode:       {ingestion_mode}")
+                print(f"  schedule:             {user_input.get('schedule', {})}")
+                print(f"  fwk_target_id:        {fwk_target_id}")
+                print(f"  need_backup:          {need_backup_val}")
+                print(f"  backup_folder_path:   {backup_folder_path}")
+                print(f"  last_modified_date:   {last_modified_date}")
+                print(f"  pic_name:             {pic_name_val}")
+                print(f"  target_dest:          {target_dest}")
+                print(f"  target_schema:        {dest_config.get('target_schema', 'NULL')}")
+                print(f"  table_name:           {dest_config.get('table_name', 'NULL')}")
+                print("="*60 + "\n")
+
+                # ---- Build row ----
+                new_row = [
+                    max_id,                                                      # ExcelConfigId
+                    9999,                                                        # FwkTriggerId
+                    dest_config.get('target_schema', 'NULL'),                   # SchemaName
+                    file_name,                                                   # FileName
+                    file_name,                                                   # FilePattern
+                    sp_url,                                                      # URL
+                    folder_path,                                                 # FolderPath
+                    dest_config.get('table_name', 'NULL'),                      # TableName
+                    sheet_name,                                                  # SheetName
+                    user_input.get('dataflow_id', 'NULL'),                      # DataflowId
+                    user_input.get('dataflow_workspace_id', 'NULL'),            # DataflowWorkspaceId
+                    key_columns_str,                                             # KeyColumnsList
+                    excluded_columns_str,                                        # ColumnsExcludeMap
+                    json.dumps(type_mapping) if type_mapping else 'NULL',        # ColumnType
+                    8,                                                           # Actions
+                    header_row + 1,                                              # HeaderRowsToDelete
+                    rows_to_delete_str,                                          # FwkTargetId (?)
+                    fwk_target_id,                                               # FwkTargetId
+                    ingestion_mode,                                              # IngestionMode
+                    need_backup_val,                                             # NeedBackup
+                    backup_folder_path,                                          # BackupFolderPath
+                    'N',                                                         # FlexibleSchema
+                    'N',                                                         # IsStaging
+                    'Y',                                                         # IsActive
+                    'N',                                                         # ExpectedEmpty
+                    csv_delimiter,                                               # CSVDelimiter
+                    last_modified_date,                                          # LastModifiedDate
+                    pic_name_val,                                                # LastModifiedBy
+                    pic_name_val,                                                # DataOwner
+                    schedule_spreadsheet
+                ]
+
+                # ---- Append ke spreadsheet ----
+                creds = auth.get_credentials()
+                service = build('sheets', 'v4', credentials=creds)
+                body = {'values': [new_row]}
+                result = service.spreadsheets().values().append(
+                    spreadsheetId=WIP_ID,
+                    range=f'{SHEET_NAME}!A1',
+                    valueInputOption='USER_ENTERED',
+                    insertDataOption='INSERT_ROWS',
+                    body=body
+                ).execute()
+
+                print(f"✅ Berhasil append! Range: {result['updates']['updatedRange']}")
+                st.success("✅ Configuration submitted!")
+
+            except Exception as e:
+                st.error(f"❌ Gagal submit: {str(e)}")
+                print(f"❌ Error: {str(e)}")
     with col_reset:
         if st.button("🔄 Start Over", type="secondary", width='stretch'):
             reset_app()
