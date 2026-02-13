@@ -552,6 +552,7 @@ elif st.session_state.step == 2:
     )
 
     selected_key_columns = []
+    filtered_columns = [col for col in all_columns if col not in selected_excluded_columns]
 
     if ingestion_method == "Delete-Insert":
         st.divider()
@@ -559,8 +560,6 @@ elif st.session_state.step == 2:
         # --- Key Columns ---
         st.markdown("### 🔑 Select Key Columns")
         st.caption("Key columns uniquely identify each row (like primary keys)")
-
-        filtered_columns = [col for col in all_columns if col not in selected_excluded_columns]
 
         num_cols = 3
         cols = st.columns(num_cols)
@@ -642,7 +641,7 @@ elif st.session_state.step == 2:
     type_mapping = {}
     
     # Tabular layout dengan 2 kolom
-    st.markdown("#### Column Type Configuration")
+    # st.markdown("#### Column Type Configuration")
     
     # Create header
     header_col1, header_col2 = st.columns([2, 1])
@@ -654,7 +653,7 @@ elif st.session_state.step == 2:
     st.markdown("---")
     
     # Create rows
-    for col_name in all_columns:
+    for col_name in filtered_columns:
         col_info = st.session_state.columns_info[col_name]
         
         # ✅ FIX: Kalau belum pernah diset, default ke "Default" (index 0)
